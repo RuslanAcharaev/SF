@@ -19,6 +19,14 @@ class BoardWrongShipException(BoardException):
     pass
 
 
+# Класс игровых правил, где можно задать размер стороны поля, набор кораблей
+class GameRules:
+    letters = "ABCDEFGHI"
+    size = 6
+    letters = letters[:size]
+    ships_lenghts = [3, 2, 2, 1, 1, 1, 1]
+
+
 # Класс клетки на игровом поле, для простого изменения внешнего вида
 class Cell(object):
     empty_cell = "\033[37mO\033[0m"
@@ -83,17 +91,16 @@ class Ship:
 
 class Board:
     # Класс игрового поля с информацией о расположении кораблей
-    letters = 'ABCDEF'
 
-    def __init__(self, hid=False, size=6):
-        self.size = size
+    def __init__(self, hid=False):
+        # self.size = size
 
         self.hid = hid
 
         self.count = 0
 
-        self.field = [[Cell.empty_cell] * self.size for _ in range(self.size)]
-        self.priority = [[1 for _ in range(self.size)] for _ in range(self.size)]
+        self.field = [[Cell.empty_cell] * GameRules.size for _ in range(GameRules.size)]
+        self.priority = [[1 for _ in range(GameRules.size)] for _ in range(GameRules.size)]
 
         self.busy = []
         self.ships = []
@@ -101,9 +108,12 @@ class Board:
     # Внешний вид игрового поля
     def __str__(self):
         res = ""
-        res += "  | 1 | 2 | 3 | 4 | 5 | 6 |"
+        head = ""
+        for i in GameRules.letters:
+            head += f" {GameRules.letters.find(i) + 1} |"
+        res += "  |" + f"{head}"
         for i, row in enumerate(self.field):
-            res += f"\n{self.letters[i]} | " + " | ".join(row) + " |"
+            res += f"\n{GameRules.letters[i]} | " + " | ".join(row) + " |"
 
         if self.hid:
             res = res.replace(Cell.ship_cell, Cell.empty_cell)
@@ -111,7 +121,7 @@ class Board:
 
     # Проверка границ игрового поля
     def out(self, d):
-        return not ((0 <= d.x < self.size) and (0 <= d.y < self.size))
+        return not ((0 <= d.x < GameRules.size) and (0 <= d.y < GameRules.size))
 
     # Метод для корректного размещения на игровом поле
     # и для отрисовки контура потопленного корабля
@@ -176,15 +186,14 @@ class Board:
     # уже подбитые корабли
     def recalculate_priority(self):
         # По умолчанию приоритет для всех клеток равен единице
-        self.priority = [[1 for _ in range(self.size)] for _ in range(self.size)]
+        self.priority = [[1 for _ in range(GameRules.size)] for _ in range(GameRules.size)]
 
         # Для клеток с промахами, подбитыми и потопленными кораблями устанавливаем
         # нулевой приоритет.
-        for x in range(self.size):
-            for y in range(self.size):
+        for x in range(GameRules.size):
+            for y in range(GameRules.size):
                 if self.field[x][y] == Cell.ship_damaged:
                     self.priority[x][y] = 0
-
                     # Для подбитых кораблей дополнительно увеличиваем приоритет
                     # для клеток по вертикали и горизонтали и обнуляем приоритет
                     # диагональных клеток
@@ -192,17 +201,17 @@ class Board:
                         if y - 1 >= 0:
                             self.priority[x - 1][y - 1] = 0
                         self.priority[x - 1][y] *= 10
-                        if y + 1 < self.size:
+                        if y + 1 < GameRules.size:
                             self.priority[x - 1][y + 1] = 0
                     if y - 1 >= 0:
                         self.priority[x][y - 1] *= 10
-                    if y + 1 < self.size:
+                    if y + 1 < GameRules.size:
                         self.priority[x][y + 1] *= 10
-                    if x + 1 < self.size:
+                    if x + 1 < GameRules.size:
                         if y - 1 >= 0:
                             self.priority[x + 1][y - 1] = 0
                         self.priority[x + 1][y] *= 10
-                        if y + 1 < self.size:
+                        if y + 1 < GameRules.size:
                             self.priority[x + 1][y + 1] = 0
 
                 if self.field[x][y] == Cell.miss_cell:
@@ -210,24 +219,23 @@ class Board:
 
                 if self.field[x][y] == Cell.ship_destroyed:
                     self.priority[x][y] = 0
-
                     # Для потопленных кораблей дополнительно обнуляем приоритет
                     # по контуру
                     if x - 1 >= 0:
                         if y - 1 >= 0:
                             self.priority[x - 1][y - 1] = 0
                         self.priority[x - 1][y] = 0
-                        if y + 1 < self.size:
+                        if y + 1 < GameRules.size:
                             self.priority[x - 1][y + 1] = 0
                     if y - 1 >= 0:
                         self.priority[x][y - 1] = 0
-                    if y + 1 < self.size:
+                    if y + 1 < GameRules.size:
                         self.priority[x][y + 1] = 0
-                    if x + 1 < self.size:
+                    if x + 1 < GameRules.size:
                         if y - 1 >= 0:
                             self.priority[x + 1][y - 1] = 0
                         self.priority[x + 1][y] = 0
-                        if y + 1 < self.size:
+                        if y + 1 < GameRules.size:
                             self.priority[x + 1][y + 1] = 0
 
     # Получение списка координат с наивысшим приоритетом
@@ -272,12 +280,10 @@ class AI(Player):
     # цель из списка координат клеток с наивысшим приоритетом
     def ask(self):
         self.enemy.recalculate_priority()
-        # print(self.enemy.priority)
-        # print(self.enemy.get_max_priority_cords())
         p = choice(self.enemy.get_max_priority_cords())
         x, y = p[0], p[1]
         d = Dot(x, y)
-        print(f"Ход компьютера: {Board.letters[d.x]}{d.y + 1}")
+        print(f"Ход компьютера: {GameRules.letters[d.x]}{d.y + 1}")
         return d
 
 
@@ -293,19 +299,19 @@ class User(Player):
 
             x, y = cords[0].upper(), cords[1:]
 
-            if x not in Board.letters or not y.isdigit() or int(y) not in range(1, len(Board.letters) + 1):
+            if x not in GameRules.letters or not y.isdigit() or int(y) not in range(1, len(GameRules.letters) + 1):
                 print(" Ошибка формата данных! Введите букву строки и номер столбца. ")
                 continue
 
-            x, y = Board.letters.index(x), int(y)
+            x, y = GameRules.letters.index(x), int(y)
 
             return Dot(x, y - 1)
 
 
+# Класс игрового процесса
 class Game:
-    def __init__(self, size=6):
-        self.ships_lenghts = [3, 2, 2, 1, 1, 1, 1]
-        self.size = size
+    def __init__(self):
+
         pl = self.random_board()
         co = self.random_board()
         co.hid = True
@@ -314,14 +320,14 @@ class Game:
         self.us = User(pl, co)
 
     def try_board(self):
-        board = Board(size=self.size)
+        board = Board()
         attempts = 0
-        for ship_l in self.ships_lenghts:
+        for ship_l in GameRules.ships_lenghts:
             while True:
                 attempts += 1
                 if attempts > 2000:
                     return None
-                ship = Ship(Dot(randint(0, self.size), randint(0, self.size)), ship_l, randint(0, 3))
+                ship = Ship(Dot(randint(0, GameRules.size), randint(0, GameRules.size)), ship_l, randint(0, 3))
                 try:
                     board.add_ship(ship)
                     break
@@ -339,9 +345,9 @@ class Game:
 
     @staticmethod
     def greeting():
-        print('-' * 62)
-        print(' ' * 10 + 'Добро пожаловать в игру "Морской бой"!')
-        print('-' * 62)
+        print('-' * (GameRules.size * 8 + 14))
+        print(' ' * int((GameRules.size * 8 - 24) / 2) + 'Добро пожаловать в игру "Морской бой"!')
+        print('-' * (GameRules.size * 8 + 14))
         print('Ввод данных: xy, где x - буква строки, y - номер столбца')
 
     @staticmethod
@@ -354,14 +360,18 @@ class Game:
 
         return "\n".join(text)
 
+    def draw_boards(self):
+        print('-' * (GameRules.size * 8 + 14))
+        line = "-" * (GameRules.size * 4 + 3)
+        us_board = f"Доска пользователя:{' ' * (GameRules.size * 4 - 16)}\n" + line + '\n' + str(self.us.board)
+        ai_board = "Доска компьютера:\n" + line + '\n' + str(self.ai.board)
+
+        print(self.print_boards(us_board, ai_board))
+
     def loop(self):
         num = 0
         while True:
-            print('-' * 62)
-            us_board = "Доска пользователя:        \n" + ("-" * 27) + '\n' + str(self.us.board)
-            ai_board = "Доска компьютера:\n" + ("-" * 27) + '\n' + str(self.ai.board)
-
-            print(self.print_boards(us_board, ai_board))
+            self.draw_boards()
 
             if num % 2 == 0:
                 print("Ходит пользователь!")
@@ -373,11 +383,13 @@ class Game:
                 num -= 1
 
             if self.ai.board.defeat():
+                self.draw_boards()
                 print("-" * 20)
                 print("Пользователь выиграл!")
                 break
 
             if self.us.board.defeat():
+                self.draw_boards()
                 print("-" * 20)
                 print("Компьютер выиграл!")
                 break
